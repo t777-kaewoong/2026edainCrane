@@ -287,6 +287,21 @@ body[data-mode="prize"] .tap{display:block}
 .loading .wordmark{font-size:56px;animation:pulse 1s ease-in-out infinite}
 @keyframes pulse{50%{transform:scale(1.05)}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+/* ── 튜토리얼 ── */
+.tut{position:fixed;inset:0;z-index:40;pointer-events:none}
+.tut[hidden]{display:none}
+.tut-hole{position:fixed;border-radius:26px;box-shadow:0 0 0 200vmax rgba(14,17,26,.62);outline:4px solid #FFD25E;outline-offset:3px;
+  transition:left .35s,top .35s,width .35s,height .35s}
+.tut-card{position:fixed;width:min(340px,calc(100vw - 32px));background:#fff;border-radius:22px;padding:16px 18px 12px;pointer-events:auto;
+  box-shadow:0 4px 0 #E2E6EC,0 16px 40px rgba(0,0,0,.32);animation:sheet-in .3s}
+.tut-card .n{font:700 12px var(--text);color:var(--red);letter-spacing:.08em}
+.tut-card h3{margin:4px 0 6px;font:400 22px var(--title);color:var(--ink)}
+.tut-card p{margin:0;font:500 15px/1.55 var(--text);color:#4A5160}
+.tut-card p b{color:var(--red)}
+.tut-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.tut-skip{font:700 13px var(--text);color:var(--sub);padding:8px 2px}
+.tut-ok{font:400 17px var(--title);color:#fff;background:var(--red);border-radius:999px;padding:8px 20px;box-shadow:0 3px 0 var(--redD)}
+.tut-ok[hidden]{display:none}
 </style>
 </head>
 <body data-mode="loading">
@@ -346,6 +361,7 @@ body[data-mode="prize"] .tap{display:block}
 <div class="peek" id="peek" hidden><canvas id="peekCanvas" width="512" height="512" aria-hidden="true"></canvas><b id="peekKind"></b></div>
 <div class="tap" id="tap"><svg viewBox="0 0 48 48"><use href="#i-hand"/></svg></div>
 <div class="callout" id="callout" role="status" aria-live="polite"></div>
+<div class="tut" id="tut" hidden><div class="tut-hole" id="tutHole"></div><div class="tut-card" id="tutCard" role="dialog" aria-live="polite"><div class="n" id="tutN"></div><h3 id="tutT"></h3><p id="tutP"></p><div class="tut-row"><button class="tut-skip" id="tutSkip">건너뛰기</button><button class="tut-ok" id="tutOk">알겠어요</button></div></div></div>
 <div class="overlay" id="colWrap" hidden></div>
 <div class="overlay" id="sheetWrap" hidden></div>
 <div class="overlay" id="warn" hidden><div class="dialog"><h3>계속할까요?</h3><span class="count" id="warnCount">10</span><div class="row"><button class="btn primary" id="stayBtn">계속</button></div></div></div>
@@ -1074,6 +1090,7 @@ function updateColCount(){ $('colCount').textContent = S.collection.size; }
 /* ═════════ 게임 흐름 ═════════ */
 async function insertCoin(){
   if (!['attract','coin'].includes(S.mode)) return;
+  if (S.mode === 'attract' && !S.tutDone){ startTut(); return; }
   audioInit();
   if (!S.session){ S.session = true; document.body.dataset.session = '1'; S.collection.clear(); updateColCount(); }
   setMode('coining');
@@ -1088,6 +1105,7 @@ async function insertCoin(){
   coin.visible = false;
   if (wasAttract) await camTo(S.view, 1100); else await wait(D(250));
   S.tries = CFG.tries; setMode('play'); resetTimer();
+  if (S.tut === 0){ stopTimer(); showTut(1); }   // 튜토리얼 중에는 시간이 흐르지 않음
   $('joy').classList.add('hint'); setTimeout(() => $('joy').classList.remove('hint'), 2600);
 }
 async function drop(){
@@ -1223,7 +1241,7 @@ async function resetSession(){
   stopTimer(); hideWarn();
   ['sheetWrap','colWrap','confirm'].forEach(id => { $(id).hidden = true; });
   if (S.prize){ disposeCap(S.prize.g); S.prize = null; }
-  S.session = false; document.body.dataset.session = '0'; S.collection.clear(); clearLocate(); updateColCount(); duckMusic(false);
+  S.session = false; document.body.dataset.session = '0'; S.collection.clear(); clearLocate(); updateColCount(); duckMusic(false); hideTut(); S.tutDone = false;
   S.sw = { x:0, z:0, vx:0, vz:0 }; S.randFail = 0; S.totalFail = 0;
   S.keys.clear(); S.stick.x = S.stick.y = 0; S.cx = START.x; S.cz = START.z; S.cable = REST; S.armT = ARM.rest; S.tries = 0; S.time = CFG.attemptSeconds;
   clearPile(); fillPile(); setView('front', 0, true);
@@ -1335,6 +1353,52 @@ $('colWrap').addEventListener('click', e => {
   }
 });
 
+/* ═════════ 튜토리얼: 세션 첫 시작 때 한 번 (조작판·동전 → 시점 → 컬렉션) ═════════ */
+const TUT = [
+  { el:'.deck', allow:'#coinBtn', t:'동전을 넣어 시작해요', p:'<b>조이스틱</b>으로 집게를 옮기고, <b>뽑기</b> 버튼으로 캡슐을 집어요.<br>먼저 <b>동전 넣기</b>를 눌러 보세요!' },
+  { el:'.panel-mid', allow:'.views button', t:'보는 방향을 바꿔 보세요', p:'<b>앞에서·옆에서·위에서</b> 중 하나를 눌러 보세요. 집게 위치를 맞추기 쉬워져요.<br>남은 <b>시간</b>과 <b>횟수</b>는 바로 위에 보여요.' },
+  { el:'#colBtn', allow:'', ok:true, t:'모은 캡슐은 컬렉션에', p:'뽑은 캡슐은 <b>컬렉션</b>에 모여요.<br>갖고 싶은 캡슐을 누르면 <b>기계 안 어디에 있는지</b> 표시해 줘요.' }
+];
+S.tut = -1; S.tutDone = false;
+function startTut(){
+  S.tutDone = true; audioInit();
+  if (!S.session){ S.session = true; document.body.dataset.session = '1'; S.collection.clear(); updateColCount(); }
+  setMode('coin'); updateDisplay(); camTo(S.view, 1100); showTut(0);
+}
+function showTut(i){
+  const st = TUT[i]; S.tut = i; $('tut').hidden = false;
+  $('tutN').textContent = `${i + 1} / ${TUT.length}`; $('tutT').textContent = st.t; $('tutP').innerHTML = st.p; $('tutOk').hidden = !st.ok;
+  $('tutCard').style.animation = 'none'; void $('tutCard').offsetWidth; $('tutCard').style.animation = '';
+  placeTut();
+}
+function placeTut(){
+  const el = document.querySelector(TUT[S.tut].el); if (!el) return;
+  const r = el.getBoundingClientRect(), pad = 8, hole = $('tutHole').style, card = $('tutCard'), cs = card.style;
+  hole.left = (r.left - pad) + 'px'; hole.top = (r.top - pad) + 'px'; hole.width = (r.width + pad*2) + 'px'; hole.height = (r.height + pad*2) + 'px';
+  const w = card.offsetWidth, h = card.offsetHeight;
+  cs.left = clamp(r.left + r.width/2 - w/2, 16, innerWidth - w - 16) + 'px';
+  cs.top = (r.top + r.height/2 > innerHeight/2 ? Math.max(16, r.top - pad - 18 - h) : Math.min(innerHeight - h - 16, r.bottom + pad + 18)) + 'px';
+}
+function hideTut(){ S.tut = -1; $('tut').hidden = true; }
+function endTut(){ hideTut(); if (S.mode === 'play') resetTimer(); }
+$('tutOk').addEventListener('click', endTut);
+$('tutSkip').addEventListener('click', endTut);
+// 대기 화면에서 아무 곳이나 누르면 튜토리얼 시작 (위쪽 아이콘 제외)
+addEventListener('pointerdown', e => { if (S.mode === 'attract' && !S.tutDone && !e.target.closest('.topbar,#volPop')) startTut(); });
+// 튜토리얼 중에는 강조한 부분과 안내 카드만 누를 수 있음
+const tutBlock = e => {
+  if (S.tut < 0) return;
+  const allow = TUT[S.tut].allow;
+  if (e.target.closest('#tutCard') || (allow && e.target.closest(allow))) return;
+  e.stopPropagation(); e.preventDefault();
+};
+['pointerdown','click'].forEach(ev => addEventListener(ev, tutBlock, true));
+addEventListener('keydown', e => {
+  if (S.tut < 0) return;
+  if (S.tut === 0 && ['c','C','Enter',' '].includes(e.key)) return;   // 동전 넣기 키는 허용
+  e.stopPropagation(); e.preventDefault();
+}, true);
+
 /* ═════════ 무입력 → 처음으로 ═════════ */
 function poke(){ S.lastInput = performance.now(); audioInit(); }
 function showWarn(){
@@ -1371,7 +1435,7 @@ addEventListener('pointerdown', e => { if (!$('volPop').hidden && !e.target.clos
 $('mvRange').addEventListener('input', e => { SND.mv = e.target.value / 100; applyVol(); });
 $('fvRange').addEventListener('input', e => { SND.fv = e.target.value / 100; applyVol(); });
 $('fvRange').addEventListener('change', () => sfx.collect());
-document.querySelectorAll('.views [data-v]').forEach(b => b.addEventListener('click', () => { if (S.mode === 'play') setView(b.dataset.v, 700); }));
+document.querySelectorAll('.views [data-v]').forEach(b => b.addEventListener('click', () => { if (S.mode === 'play'){ setView(b.dataset.v, 700); if (S.tut === 1) showTut(2); } }));
 const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' };
 addEventListener('keydown', e => {
   if (e.key === 'Escape'){ if (!$('sheetWrap').hidden) return closeSheet(); if (!$('colWrap').hidden) return closeCollection(); if (!$('confirm').hidden) return $('confirm').hidden = true; }
@@ -1388,6 +1452,7 @@ const jb = $('joyBall'), js = $('joyShaft'), jsh = $('joyShadow'), tapEl = $('ta
 let last = performance.now();
 function frame(now){
   const dt = clamp((now - last) / 1000, 0.001, 0.05); last = now;
+  if (S.tut >= 0) placeTut();
   let dx = 0, dz = 0;
   if (S.mode === 'play'){
     const sx = Math.abs(S.stick.x) > .18 ? S.stick.x : 0, sy = Math.abs(S.stick.y) > .18 ? S.stick.y : 0;
