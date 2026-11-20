@@ -292,7 +292,8 @@ body[data-mode="prize"] .tap{display:block}
 .coin-ctl{position:relative}
 .coin-tip{position:absolute;left:50%;bottom:calc(100% + 12px);transform:translateX(-50%);z-index:2;white-space:nowrap;pointer-events:none;
   font:400 17px var(--title);color:#fff;background:var(--red);border-radius:999px;padding:7px 14px;box-shadow:0 3px 0 var(--redD),0 8px 18px rgba(0,0,0,.18);
-  animation:bob 1.1s ease-in-out infinite;display:none}
+  animation:tipBob 1.4s ease-in-out infinite;display:none}
+@keyframes tipBob{50%{transform:translate(-50%,-4px)}}   /* 가운데 정렬(translateX)을 유지한 채 위아래로만 */
 .coin-tip::after{content:"";position:absolute;left:50%;top:100%;margin-left:-7px;border:7px solid transparent;border-top-color:var(--red)}
 body[data-mode="attract"] .coin-tip,body[data-mode="coin"] .coin-tip{display:block}
 body[data-tut="1"] .coin-tip{display:none}
@@ -365,7 +366,7 @@ body[data-tut="1"] .session-only{display:flex}
     <div class="segs"><div class="seg" id="segTime"><b id="dispTime">--</b>시간</div><div class="seg"><b id="dispTries">00</b>횟수</div></div>
     <div class="views" role="group" aria-label="보는 방향"><img src="images/icons/view.png" alt=""><button data-v="front" class="on">앞에서</button><button data-v="side">옆에서</button><button data-v="top">위에서</button></div>
   </div>
-  <div class="ctl coin-ctl"><span class="coin-tip">동전을 넣으면 시작!</span><button class="coin" id="coinBtn" aria-label="동전 넣기"><span class="tok">E</span><span class="slot"></span></button><span class="ctl-l">동전 넣기</span></div>
+  <div class="ctl coin-ctl"><span class="coin-tip">동전을 넣어주세요</span><button class="coin" id="coinBtn" aria-label="동전 넣기"><span class="tok">E</span><span class="slot"></span></button><span class="ctl-l">동전 넣기</span></div>
   <div class="ctl"><button class="push" id="dropBtn" aria-label="뽑기"><span class="cap"></span></button><span class="ctl-l">뽑기</span></div>
 </section>
 
