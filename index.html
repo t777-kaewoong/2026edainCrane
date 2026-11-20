@@ -111,7 +111,7 @@ body[data-mode="play"] .joy{cursor:grab}
 .peek{position:fixed;right:max(clamp(12px,3vw,44px),env(safe-area-inset-right));top:max(25dvh,calc(env(safe-area-inset-top) + 94px));
   width:clamp(88px,25vw,min(34dvh,256px));z-index:8;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
 .peek[hidden]{display:none}
-.peek img{width:100%;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(30,40,60,.28))}
+.peek canvas{width:100%;aspect-ratio:1;filter:drop-shadow(0 8px 12px rgba(30,40,60,.28))}
 .peek b{font:400 clamp(14px,2vw,18px) var(--title);color:#fff;background:var(--red);border-radius:999px;padding:4px 10px;white-space:nowrap;box-shadow:0 3px 0 var(--redD)}
 .peek.is-note b{background:#C79A2E;box-shadow:0 3px 0 #9A7420}
 @media (max-height:480px){.peek{width:clamp(52px,calc(100dvh - 292px),min(25vw,166px))}}
@@ -343,7 +343,7 @@ body[data-mode="prize"] .tap{display:block}
   <div class="ctl"><button class="push" id="dropBtn" aria-label="뽑기"><span class="cap"></span></button><span class="ctl-l">뽑기</span></div>
 </section>
 
-<div class="peek" id="peek" hidden><img id="peekImg" alt=""><b id="peekKind"></b></div>
+<div class="peek" id="peek" hidden><canvas id="peekCanvas" width="512" height="512" aria-hidden="true"></canvas><b id="peekKind"></b></div>
 <div class="tap" id="tap"><svg viewBox="0 0 48 48"><use href="#i-hand"/></svg></div>
 <div class="callout" id="callout" role="status" aria-live="polite"></div>
 <div class="overlay" id="colWrap" hidden></div>
@@ -666,13 +666,8 @@ function spriteCanvas(tid, kind){
   return spriteCache[k] = c;
 }
 /* 2D 캡슐 아이콘: 위 투명 돔 + 아래 색 반구 (3D 캡슐과 같은 모양) */
-const iconCache = {}, previewCache = {};
-function iconURL(tid, kind, preview = false){
-  const cache = preview ? previewCache : iconCache;
-  const k = key(tid, kind); if (cache[k]) return cache[k];
-  const t = byId[tid], c = document.createElement('canvas');
-  const scale = preview ? 2 : 1; c.width = c.height = 256 * scale;
-  const x = c.getContext('2d'); x.scale(scale, scale);
+function drawCapsuleIcon(x, tid, kind, preview = false){
+  const t = byId[tid];
   const cx = 128, cy = 128, r = 116, split = preview ? 183 : 150;
   x.save(); x.beginPath(); x.arc(cx,cy,r,0,7); x.clip();
   const dome = x.createRadialGradient(100,70,10,cx,cy,r); dome.addColorStop(0,'#FFFFFF'); dome.addColorStop(1, kind === 1 ? hexA(t.theme,.28) : 'rgba(240,226,190,.45)');
@@ -688,7 +683,13 @@ function iconURL(tid, kind, preview = false){
   x.lineWidth = 5; x.strokeStyle = 'rgba(60,70,90,.18)'; x.beginPath(); x.arc(cx,cy,r,0,7); x.stroke();
   x.fillStyle = 'rgba(255,255,255,.75)'; x.beginPath(); x.ellipse(82,64,34,15,-.6,0,7); x.fill();
   x.fillStyle = 'rgba(255,255,255,.4)'; x.beginPath(); x.ellipse(196,96,8,22,.4,0,7); x.fill();
-  return cache[k] = c.toDataURL();
+}
+const iconCache = {};
+function iconURL(tid, kind){
+  const k = key(tid, kind); if (iconCache[k]) return iconCache[k];
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  drawCapsuleIcon(c.getContext('2d'), tid, kind);
+  return iconCache[k] = c.toDataURL();
 }
 function canvasTex(w, h, draw){
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
@@ -707,10 +708,10 @@ function drawWordmark(c, x, y, size, align = 'center'){
 
 /* ═════════ 3D 장면 ═════════ */
 const canvas = $('scene');
+const MAX_SCENE_PIXELS = 3_000_000;
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias:true }); }
 catch(e){ $('nogl').hidden = false; $('loading').remove(); throw e; }
-renderer.setPixelRatio(Math.min(2, devicePixelRatio));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
 const scene = new THREE.Scene();
@@ -986,7 +987,9 @@ const VIEWS = {
   coin: { pos:[0.24,0.78,1.3], look:[0.2,0.6,0.4] },
   prize:{ pos:[-0.22,0.5,1.05], look:[-0.27,0.2,0.42] }
 };
-const preview = $('peek'), previewImage = $('peekImg'), previewKind = $('peekKind');
+const preview = $('peek'), previewKind = $('peekKind');
+const previewContext = $('peekCanvas').getContext('2d');
+previewContext.scale(2, 2);
 const cameraOffset = new THREE.Vector2();
 let viewportWidth = 1, viewportHeight = 1, previewInset = 0;
 function fitK(){ const a = camera.aspect; return a < 1 ? clamp(0.95 / a, 1, 2.2) : 1; }
@@ -1045,7 +1048,9 @@ function setView(v, ms = 700, silent = false){
 }
 function resize(){
   viewportWidth = canvas.clientWidth; viewportHeight = canvas.clientHeight;
-  renderer.setSize(viewportWidth, viewportHeight, false); camera.aspect = viewportWidth / viewportHeight;
+  const pixelRatio = Math.min(2, devicePixelRatio, Math.sqrt(MAX_SCENE_PIXELS / (viewportWidth * viewportHeight)));
+  renderer.setDrawingBufferSize(viewportWidth, viewportHeight, pixelRatio);
+  camera.aspect = viewportWidth / viewportHeight;
   const style = getComputedStyle(preview);
   previewInset = parseFloat(style.width) + parseFloat(style.right) + 12;
   const v = VIEWS[S.camView] ? viewOf(S.camView) : null;
@@ -1434,7 +1439,8 @@ function frame(now){
     const k = key(target.tid, target.kind);
     if (preview.dataset.k !== k){
       preview.dataset.k = k;
-      previewImage.src = iconURL(target.tid, target.kind, true);
+      previewContext.clearRect(0, 0, 256, 256);
+      drawCapsuleIcon(previewContext, target.tid, target.kind, true);
       previewKind.textContent = KIND_NAME[target.kind];
       preview.classList.toggle('is-note', target.kind === 2);
     }
