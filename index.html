@@ -104,6 +104,18 @@ body[data-mode="play"] .joy{cursor:grab}
 .seg b::after{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.14) 0 35%,transparent 36%)}
 .seg.warn b{animation:blink .5s infinite}
 @keyframes blink{50%{opacity:.35}}
+.views{display:inline-flex;align-items:center;gap:2px;padding:4px;border-radius:999px;background:#E9EDF2;box-shadow:inset 0 1px 3px rgba(0,0,0,.12)}
+.views img{width:28px;height:28px;margin:0 4px 0 2px}
+.views button{font:700 13px var(--text);color:#5A6170;padding:7px 11px;border-radius:999px}
+.views button.on{background:#fff;color:var(--red);box-shadow:0 2px 0 #CDD3DC}
+.peek{position:fixed;z-index:11;transform:translate(-50%,-100%);display:flex;align-items:center;gap:8px;padding:6px 14px 6px 6px;border-radius:999px;background:#fff;
+  box-shadow:0 4px 0 #E1E5EB,0 10px 24px rgba(30,40,60,.22);pointer-events:none;white-space:nowrap}
+.peek[hidden]{display:none}
+.peek::after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:#fff}
+.peek img{width:46px;height:46px}
+.peek b{display:block;font:400 16px var(--title);color:var(--ink)}
+.peek small{display:block;font:700 11px var(--text);color:var(--red)}
+.peek.note small{color:#B88A1E}
 .view-btn{display:inline-flex;align-items:center;gap:6px;height:42px;padding:0 14px 0 8px;border-radius:999px;color:#4A5160;font:700 13px var(--text);
   background:linear-gradient(#fff,#EEF1F5);box-shadow:inset 0 1px 0 #fff,0 4px 0 #CDD3DC}
 .view-btn img{width:30px;height:30px;object-fit:contain;mix-blend-mode:multiply}
@@ -311,12 +323,13 @@ body[data-mode="prize"] .tap{display:block}
   </div><span class="ctl-l">움직이기</span></div>
   <div class="panel-mid">
     <div class="segs"><div class="seg" id="segTime"><b id="dispTime">--</b>시간</div><div class="seg"><b id="dispTries">00</b>횟수</div></div>
-    <button class="view-btn" id="viewBtn"><img src="images/icons/view.png" alt=""><span id="viewLbl">옆에서 보기</span></button>
+    <div class="views" role="group" aria-label="보는 방향"><img src="images/icons/view.png" alt=""><button data-v="front" class="on">앞에서</button><button data-v="side">옆에서</button><button data-v="top">위에서</button></div>
   </div>
   <div class="ctl"><button class="coin" id="coinBtn" aria-label="동전 넣기"><span class="tok">E</span><span class="slot"></span></button><span class="ctl-l">동전 넣기</span></div>
   <div class="ctl"><button class="push" id="dropBtn" aria-label="뽑기"><span class="cap"></span></button><span class="ctl-l">뽑기</span></div>
 </section>
 
+<div class="peek" id="peek" hidden><img id="peekImg" alt=""><span><b id="peekTopic"></b><small id="peekKind"></small></span></div>
 <div class="tap" id="tap"><svg viewBox="0 0 48 48"><use href="#i-hand"/></svg></div>
 <div class="callout" id="callout" role="status" aria-live="polite"></div>
 <div class="overlay" id="colWrap" hidden></div>
@@ -728,16 +741,17 @@ function buildMachine(){
   box(1.05, 0.86, 0.8, M.white, 0, 0.45, 0, { r:.03 });
   box(0.98, 0.02, 0.74, M.floor, 0, 0.87, 0);
   for (const sx of [-1,1]) for (const sz of [-1,1]) box(0.045, 0.74, 0.045, M.white, sx*0.5, 1.24, sz*0.375, { r:.012 });
-  box(1.05, 0.14, 0.8, M.white, 0, 1.68, 0, { r:.03, cast:false });
-  plane(0.92, 0.66, new THREE.MeshBasicMaterial({ color:'#ffffff' }), 0, 1.609, 0, { rx:Math.PI/2 });
-  box(1.0, 0.012, 0.01, M.red, 0, 1.604, 0.392, { cast:false });
+  parts.roof = [];
+  parts.roof.push(box(1.05, 0.14, 0.8, M.white, 0, 1.68, 0, { r:.03, cast:false }));
+  parts.roof.push(plane(0.92, 0.66, new THREE.MeshBasicMaterial({ color:'#ffffff' }), 0, 1.609, 0, { rx:Math.PI/2 }));
+  parts.roof.push(box(1.0, 0.012, 0.01, M.red, 0, 1.604, 0.392, { cast:false }));
 
   const marquee = canvasTex(1024, 128, (c, w, h) => {
     const g = c.createLinearGradient(0,0,0,h); g.addColorStop(0,'#fff'); g.addColorStop(1,'#EEF1F5'); c.fillStyle = g; c.fillRect(0,0,w,h);
     drawWordmark(c, w/2, 90, 78);
   });
-  plane(1.0, 0.125, basic(marquee, { transparent:false }), 0, 1.68, 0.4015);
-  for (const s of [-1,1]) plane(0.76, 0.125, basic(marquee, { transparent:false }), s*0.5251, 1.68, 0, { ry:s*Math.PI/2 });
+  parts.roof.push(plane(1.0, 0.125, basic(marquee, { transparent:false }), 0, 1.68, 0.4015));
+  for (const s of [-1,1]) parts.roof.push(plane(0.76, 0.125, basic(marquee, { transparent:false }), s*0.5251, 1.68, 0, { ry:s*Math.PI/2 }));
 
   plane(0.955, 0.72, M.glass, 0, 1.24, 0.388);
   for (const s of [-1,1]) plane(0.71, 0.72, M.glass, s*0.488, 1.24, 0, { ry:Math.PI/2 });
@@ -842,7 +856,7 @@ function buildMachine(){
   parts.bulbs = [];
   const bg = new THREE.SphereGeometry(0.0075, 12, 8);
   for (const y of [1.738, 1.622]) for (let i = 0; i < 17; i++){
-    const b = new THREE.Mesh(bg, parts.bulbOff[i%2]); b.position.set(-0.48 + i*0.06, y, 0.404); b.userData.i = i; b.userData.c = i%2; scene.add(b); parts.bulbs.push(b);
+    const b = new THREE.Mesh(bg, parts.bulbOff[i%2]); b.position.set(-0.48 + i*0.06, y, 0.404); b.userData.i = i; b.userData.c = i%2; scene.add(b); parts.bulbs.push(b); parts.roof.push(b);
   }
 
   const coin = new THREE.Group(); const cm = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.004, 32), M.gold); cm.rotation.z = Math.PI/2; coin.add(cm); coin.visible = false; scene.add(coin); parts.coin = coin;
@@ -857,8 +871,8 @@ const capGeo = {
   floorDisc:new THREE.CircleGeometry(R*0.99, 40)
 };
 capGeo.lip.rotateX(Math.PI/2); capGeo.floorDisc.rotateX(-Math.PI/2);
-const domeMat = new THREE.MeshPhysicalMaterial({ color:'#BFD3EC', transparent:true, opacity:.32, roughness:.06, metalness:0, clearcoat:1, clearcoatRoughness:.03, envMapIntensity:1.4, specularIntensity:1, depthWrite:false });
-const domeInMat = new THREE.MeshPhysicalMaterial({ color:'#A9BFDB', transparent:true, opacity:.16, roughness:.1, side:THREE.BackSide, depthWrite:false });
+const domeMat = new THREE.MeshPhysicalMaterial({ color:'#E4EEF9', transparent:true, opacity:.16, roughness:.06, metalness:0, clearcoat:1, clearcoatRoughness:.03, envMapIntensity:1.4, specularIntensity:1, depthWrite:false });
+const domeInMat = new THREE.MeshPhysicalMaterial({ color:'#C9D9EC', transparent:true, opacity:.07, roughness:.1, side:THREE.BackSide, depthWrite:false });
 const matCache = {};
 function capMats(tid, kind){
   const k = key(tid, kind); if (matCache[k]) return matCache[k]; const t = byId[tid];
@@ -880,7 +894,7 @@ function makeCapsule(tid, kind, own = false){
   const domeIn = new THREE.Mesh(capGeo.domeIn, own ? domeInMat.clone() : domeInMat); domeIn.renderOrder = 2;
   const dome = new THREE.Mesh(capGeo.dome, own ? domeMat.clone() : domeMat); dome.renderOrder = 3;
   top.add(domeIn, dome);
-  const sp = new THREE.Sprite(m.sprite); sp.scale.setScalar(R * 1.3); sp.position.y = R * 0.36; sp.renderOrder = 1;
+  const sp = new THREE.Sprite(m.sprite); sp.scale.setScalar(R * 1.65); sp.position.y = R * 0.42; sp.renderOrder = 1;
   orient.add(base, floorD, lip, top, sp);
   g.userData = { tid, kind, top, dome, domeIn, orient, sprite:sp }; scene.add(g); return g;
 }
@@ -948,6 +962,7 @@ function ensureInMachine(tid, kind){
 const VIEWS = {
   front:{ pos:[0.12,1.72,2.15], look:[0.1,1.0,0.0] },
   side: { pos:[2.1,1.62,0.45], look:[0.1,1.0,0.0] },
+  top:  { pos:[0.1,2.55,0.6], look:[0.08,0.9,0.15] },
   coin: { pos:[0.24,0.78,1.3], look:[0.2,0.6,0.4] },
   prize:{ pos:[-0.22,0.5,1.05], look:[-0.27,0.2,0.42] }
 };
@@ -963,6 +978,11 @@ async function camTo(name, ms = 900){
   const to = viewOf(name), p0 = camera.position.clone(), l0 = camLook.clone();
   await tween(ms, t => { camera.position.lerpVectors(p0, to.pos, t); camLook.lerpVectors(l0, to.look, t); camera.lookAt(camLook); });
   S.camView = name;
+}
+function setView(v, ms = 700, silent = false){
+  S.view = v; document.querySelectorAll('.views [data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  parts.roof.forEach(m => m.visible = v !== 'top');
+  if (!silent) camTo(v, ms);
 }
 function resize(){
   const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -1056,7 +1076,7 @@ async function carry(cap, drama){
   const slot = cap.slot; removeCap(cap); S.held = cap; S.slipOff = 0;
   if (S.pair && S.pair.tid === cap.tid && S.pair.kind === cap.kind) clearLocate();
   if (slot) jostle(slot.pos, cap);
-  if (S.view !== 'front'){ S.view = 'front'; $('viewLbl').textContent = '옆에서 보기'; camTo('front', 900); }
+  if (S.view !== 'front') setView('front', 900);
   S.motorOn = true;
   const c0 = S.cable;
   if (drama){
@@ -1092,8 +1112,8 @@ async function openPrize(){
   setMode('opening'); sfx.open();
   const { g, tid, kind } = S.prize, u = g.userData;
   await tween(260, t => g.rotation.z = Math.sin(t * Math.PI * 4) * 0.15);
-  await tween(480, t => { u.top.position.y = t * 0.09; u.top.position.z = -t * 0.04; u.top.rotation.x = -t * 1.2; u.dome.material.opacity = .32 * (1 - t); u.domeIn.material.opacity = .16 * (1 - t);
-    u.sprite.position.y = R * (0.36 + t * 0.9); u.sprite.scale.setScalar(R * (1.3 + t * 0.9)); }, ease.out);
+  await tween(480, t => { u.top.position.y = t * 0.09; u.top.position.z = -t * 0.04; u.top.rotation.x = -t * 1.2; u.dome.material.opacity = .16 * (1 - t); u.domeIn.material.opacity = .07 * (1 - t);
+    u.sprite.position.y = R * (0.42 + t * 0.9); u.sprite.scale.setScalar(R * (1.65 + t * 0.9)); }, ease.out);
   const isNew = !S.collection.has(key(tid, kind));
   S.collection.set(key(tid, kind), Date.now()); S.newKey = isNew ? key(tid, kind) : null; updateColCount();
   openSheet(tid, kind, 'prize');
@@ -1134,7 +1154,7 @@ async function resetSession(){
   S.session = false; document.body.dataset.session = '0'; S.collection.clear(); clearLocate(); updateColCount(); duckMusic(false);
   S.sw = { x:0, z:0, vx:0, vz:0 }; S.randFail = 0; S.totalFail = 0;
   S.keys.clear(); S.stick.x = S.stick.y = 0; S.cx = START.x; S.cz = START.z; S.cable = REST; S.armT = ARM.rest; S.tries = 0; S.time = CFG.attemptSeconds;
-  clearPile(); fillPile(); S.view = 'front'; $('viewLbl').textContent = '옆에서 보기';
+  clearPile(); fillPile(); setView('front', 0, true);
   setMode('attract'); updateDisplay(); S.camView = 'attract';
 }
 
@@ -1279,10 +1299,7 @@ addEventListener('pointerdown', e => { if (!$('volPop').hidden && !e.target.clos
 $('mvRange').addEventListener('input', e => { SND.mv = e.target.value / 100; applyVol(); });
 $('fvRange').addEventListener('input', e => { SND.fv = e.target.value / 100; applyVol(); });
 $('fvRange').addEventListener('change', () => sfx.collect());
-$('viewBtn').addEventListener('click', () => {
-  if (S.mode !== 'play') return;
-  S.view = S.view === 'front' ? 'side' : 'front'; $('viewLbl').textContent = S.view === 'front' ? '옆에서 보기' : '앞에서 보기'; camTo(S.view, 700);
-});
+document.querySelectorAll('.views [data-v]').forEach(b => b.addEventListener('click', () => { if (S.mode === 'play') setView(b.dataset.v, 700); }));
 const KEYMAP = { ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right' };
 addEventListener('keydown', e => {
   if (e.key === 'Escape'){ if (!$('sheetWrap').hidden) return closeSheet(); if (!$('colWrap').hidden) return closeCollection(); if (!$('confirm').hidden) return $('confirm').hidden = true; }
@@ -1347,6 +1364,14 @@ function frame(now){
     tmpV.copy(S.prize.g.position).project(camera);
     tapEl.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px'; tapEl.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px';
   }
+  // 집게 아래 캡슐 미리보기
+  const pk = S.mode === 'play' ? findTarget(S.cx, S.cz) : null, peek = $('peek');
+  if (pk){
+    const k2 = key(pk.tid, pk.kind);
+    if (peek.dataset.k !== k2){ const t = byId[pk.tid]; peek.dataset.k = k2; $('peekImg').src = iconURL(pk.tid, pk.kind); $('peekTopic').textContent = t.topic; $('peekKind').textContent = KIND_NAME[pk.kind]; peek.classList.toggle('note', pk.kind === 2); }
+    tmpV.copy(pk.g.position); tmpV.y += R * 2.4; tmpV.project(camera);
+    peek.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px'; peek.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px'; peek.hidden = false;
+  } else if (!peek.hidden){ peek.hidden = true; peek.dataset.k = ''; }
   // 모터 소리
   if (SND.motor) setMotor((S.mode === 'play' && (dx || dz)) || S.motorOn ? 1 : 0, S.motorOn ? 0.8 : 1);
   if (S.camView === 'attract'){
