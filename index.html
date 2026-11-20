@@ -108,14 +108,13 @@ body[data-mode="play"] .joy{cursor:grab}
 .views img{width:28px;height:28px;margin:0 4px 0 2px}
 .views button{font:700 13px var(--text);color:#5A6170;padding:7px 11px;border-radius:999px}
 .views button.on{background:#fff;color:var(--red);box-shadow:0 2px 0 #CDD3DC}
-.peek{position:fixed;z-index:11;transform:translate(-50%,-100%);display:flex;align-items:center;gap:8px;padding:6px 14px 6px 6px;border-radius:999px;background:#fff;
-  box-shadow:0 4px 0 #E1E5EB,0 10px 24px rgba(30,40,60,.22);pointer-events:none;white-space:nowrap}
+.peek{position:fixed;right:max(clamp(12px,3vw,44px),env(safe-area-inset-right));top:max(25dvh,calc(env(safe-area-inset-top) + 94px));
+  width:clamp(88px,25vw,min(34dvh,256px));z-index:8;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}
 .peek[hidden]{display:none}
-.peek::after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-8px;border:8px solid transparent;border-bottom:0;border-top-color:#fff}
-.peek img{width:46px;height:46px}
-.peek b{display:block;font:400 16px var(--title);color:var(--ink)}
-.peek small{display:block;font:700 11px var(--text);color:var(--red)}
-.peek.note small{color:#B88A1E}
+.peek img{width:100%;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 8px 12px rgba(30,40,60,.28))}
+.peek b{font:400 clamp(14px,2vw,18px) var(--title);color:#fff;background:var(--red);border-radius:999px;padding:4px 10px;white-space:nowrap;box-shadow:0 3px 0 var(--redD)}
+.peek.is-note b{background:#C79A2E;box-shadow:0 3px 0 #9A7420}
+@media (max-height:480px){.peek{width:clamp(52px,calc(100dvh - 292px),min(25vw,166px))}}
 .view-btn{display:inline-flex;align-items:center;gap:6px;height:42px;padding:0 14px 0 8px;border-radius:999px;color:#4A5160;font:700 13px var(--text);
   background:linear-gradient(#fff,#EEF1F5);box-shadow:inset 0 1px 0 #fff,0 4px 0 #CDD3DC}
 .view-btn img{width:30px;height:30px;object-fit:contain;mix-blend-mode:multiply}
@@ -156,6 +155,21 @@ body[data-mode="play"] .push{animation:glowR 1.6s ease-in-out infinite}
   .push{width:88px;height:88px}.push .cap{width:60px;height:60px;margin:-35px 0 0 -30px}
   .coin{width:62px;height:86px}.coin .tok{width:38px;height:38px;margin-left:-19px;font-size:15px}
   .seg b{font-size:24px;padding:4px 8px}.segs{gap:6px;padding:6px}
+}
+@media (max-width:560px){
+  .deck{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 6px;padding:10px 12px 16px}
+  .panel-mid{grid-column:1 / -1;grid-row:1;flex-direction:row;justify-content:space-between}
+  .views button{white-space:nowrap}
+  .icons{gap:8px}.ibtn{width:48px;height:48px}.ibtn img{width:34px;height:34px}
+}
+@media (max-width:560px),(max-height:480px){
+  .ctl:first-child{gap:12px}
+  .joy{--s:76px}.joy-ball{width:42px;height:42px;margin:-21px 0 0 -21px}
+  .push{width:76px;height:76px}.push .cap{width:52px;height:52px;margin:-30px 0 0 -26px}
+  .coin{width:54px;height:64px}
+}
+@media (min-width:561px) and (max-height:480px){
+  .panel-mid{flex-direction:row;justify-content:center}
 }
 
 /* ── 콜아웃·탭 표시 ── */
@@ -329,7 +343,7 @@ body[data-mode="prize"] .tap{display:block}
   <div class="ctl"><button class="push" id="dropBtn" aria-label="뽑기"><span class="cap"></span></button><span class="ctl-l">뽑기</span></div>
 </section>
 
-<div class="peek" id="peek" hidden><img id="peekImg" alt=""><span><b id="peekTopic"></b><small id="peekKind"></small></span></div>
+<div class="peek" id="peek" hidden><img id="peekImg" alt=""><b id="peekKind"></b></div>
 <div class="tap" id="tap"><svg viewBox="0 0 48 48"><use href="#i-hand"/></svg></div>
 <div class="callout" id="callout" role="status" aria-live="polite"></div>
 <div class="overlay" id="colWrap" hidden></div>
@@ -652,15 +666,19 @@ function spriteCanvas(tid, kind){
   return spriteCache[k] = c;
 }
 /* 2D 캡슐 아이콘: 위 투명 돔 + 아래 색 반구 (3D 캡슐과 같은 모양) */
-const iconCache = {};
-function iconURL(tid, kind){
-  const k = key(tid, kind); if (iconCache[k]) return iconCache[k];
-  const t = byId[tid], c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
-  const cx = 128, cy = 128, r = 116, split = 150;
+const iconCache = {}, previewCache = {};
+function iconURL(tid, kind, preview = false){
+  const cache = preview ? previewCache : iconCache;
+  const k = key(tid, kind); if (cache[k]) return cache[k];
+  const t = byId[tid], c = document.createElement('canvas');
+  const scale = preview ? 2 : 1; c.width = c.height = 256 * scale;
+  const x = c.getContext('2d'); x.scale(scale, scale);
+  const cx = 128, cy = 128, r = 116, split = preview ? 183 : 150;
   x.save(); x.beginPath(); x.arc(cx,cy,r,0,7); x.clip();
   const dome = x.createRadialGradient(100,70,10,cx,cy,r); dome.addColorStop(0,'#FFFFFF'); dome.addColorStop(1, kind === 1 ? hexA(t.theme,.28) : 'rgba(240,226,190,.45)');
   x.fillStyle = dome; x.fillRect(0,0,256,256);
-  x.drawImage(spriteCanvas(tid,kind), 34, 18, 188, 188);
+  if (preview) drawChar(x, t, 128, 112, 57);
+  else x.drawImage(spriteCanvas(tid,kind), 34, 18, 188, 188);
   const base = kind === 1 ? t.theme : '#F6E3B4';
   const bg = x.createLinearGradient(0,split,0,256); bg.addColorStop(0, base); bg.addColorStop(1, kind === 1 ? hexA(t.theme,1) : '#E7CD92');
   x.fillStyle = bg; x.fillRect(0,split,256,256);
@@ -670,7 +688,7 @@ function iconURL(tid, kind){
   x.lineWidth = 5; x.strokeStyle = 'rgba(60,70,90,.18)'; x.beginPath(); x.arc(cx,cy,r,0,7); x.stroke();
   x.fillStyle = 'rgba(255,255,255,.75)'; x.beginPath(); x.ellipse(82,64,34,15,-.6,0,7); x.fill();
   x.fillStyle = 'rgba(255,255,255,.4)'; x.beginPath(); x.ellipse(196,96,8,22,.4,0,7); x.fill();
-  return iconCache[k] = c.toDataURL();
+  return cache[k] = c.toDataURL();
 }
 function canvasTex(w, h, draw){
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
@@ -819,9 +837,11 @@ function buildMachine(){
   for (const sx of [-1,1]) for (const sz of [-1,1]){ const w = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 20), M.wheel); w.rotation.z = Math.PI/2; w.position.set(sx*0.42, 0.035, sz*0.3); scene.add(w); }
 
   // 집게
-  for (const s of [-1,1]) box(0.95, 0.012, 0.012, M.metal, 0, 1.585, s*0.33, { cast:false });
+  parts.rails = [];
+  for (const s of [-1,1]) parts.rails.push(box(0.95, 0.012, 0.012, M.metal, 0, 1.585, s*0.33, { cast:false }));
   parts.beam = box(0.024, 0.016, 0.68, M.metal, START.x, 1.585, 0);
   parts.carriage = box(0.06, 0.03, 0.05, M.white2, START.x, 1.57, START.z, { r:.008 });
+  parts.rails.push(parts.beam, parts.carriage);
   const root = new THREE.Group(); scene.add(root); parts.claw = root;
   const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 1, 8), M.metal); root.add(cable); parts.cable = cable;
   const hub = new THREE.Group(); root.add(hub); parts.hub = hub;
@@ -966,29 +986,73 @@ const VIEWS = {
   coin: { pos:[0.24,0.78,1.3], look:[0.2,0.6,0.4] },
   prize:{ pos:[-0.22,0.5,1.05], look:[-0.27,0.2,0.42] }
 };
+const preview = $('peek'), previewImage = $('peekImg'), previewKind = $('peekKind');
+const cameraOffset = new THREE.Vector2();
+let viewportWidth = 1, viewportHeight = 1, previewInset = 0;
 function fitK(){ const a = camera.aspect; return a < 1 ? clamp(0.95 / a, 1, 2.2) : 1; }
 function viewOf(name){
   const v = VIEWS[name], look = new THREE.Vector3(...v.look), pos = new THREE.Vector3(...v.pos);
-  pos.sub(look).multiplyScalar(fitK()).add(look);
-  if (camera.aspect < 1) look.y -= 0.06 * fitK();
-  return { pos, look };
+  const gameView = name === 'front' || name === 'side' || name === 'top';
+  const shortGameView = gameView && viewportHeight <= 480;
+  const aspect = gameView ? (viewportWidth - previewInset) / viewportHeight : camera.aspect;
+  const fit = gameView ? Math.max(1, 0.95 / aspect, shortGameView ? 410 / viewportHeight : 1) : fitK();
+  const freeSpace = Math.max(0, (viewportWidth - viewportHeight * 0.95) / 2);
+  const offsetX = gameView ? clamp(previewInset - freeSpace, 0, previewInset / 2) : 0;
+  const offsetY = shortGameView ? viewportHeight * 0.095 : 0;
+  pos.sub(look).multiplyScalar(fit).add(look);
+  if (aspect < 1) look.y -= 0.06 * fit;
+  return { pos, look, offsetX, offsetY };
 }
+function setCameraOffset(x, y){
+  cameraOffset.set(x, y);
+  camera.setViewOffset(viewportWidth, viewportHeight, x, y, viewportWidth, viewportHeight);
+}
+let cameraMove = 0;
 async function camTo(name, ms = 900){
+  const move = ++cameraMove;
   S.camView = 'moving';
-  const to = viewOf(name), p0 = camera.position.clone(), l0 = camLook.clone();
-  await tween(ms, t => { camera.position.lerpVectors(p0, to.pos, t); camLook.lerpVectors(l0, to.look, t); camera.lookAt(camLook); });
+  const p0 = camera.position.clone(), l0 = camLook.clone(), offset0 = cameraOffset.clone();
+  let to = viewOf(name), width = viewportWidth, height = viewportHeight;
+  await tween(ms, t => {
+    if (move !== cameraMove) return;
+    if (width !== viewportWidth || height !== viewportHeight){ width = viewportWidth; height = viewportHeight; to = viewOf(name); }
+    camera.position.lerpVectors(p0, to.pos, t);
+    camLook.lerpVectors(l0, to.look, t);
+    camera.lookAt(camLook);
+    const x = lerp(offset0.x, to.offsetX, t), y = lerp(offset0.y, to.offsetY, t);
+    if (x !== cameraOffset.x || y !== cameraOffset.y) setCameraOffset(x, y);
+  });
+  if (move !== cameraMove) return;
   S.camView = name;
 }
+const clawGhost = new THREE.MeshBasicMaterial({ color:'#626D80', transparent:true, opacity:.16, depthWrite:false });
 function setView(v, ms = 700, silent = false){
   S.view = v; document.querySelectorAll('.views [data-v]').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  parts.roof.forEach(m => m.visible = v !== 'top');
-  if (!silent) camTo(v, ms);
+  const top = v === 'top';
+  parts.roof.forEach(m => m.visible = !top);
+  parts.rails.forEach(m => m.visible = !top); parts.cable.visible = !top;
+  parts.hub.traverse(o => {
+    if (!o.isMesh) return;
+    if (!o.userData.solidMaterial){
+      o.userData.solidMaterial = o.material;
+      o.userData.solidShadow = o.castShadow;
+    }
+    o.material = top ? clawGhost : o.userData.solidMaterial;
+    o.castShadow = !top && o.userData.solidShadow;
+  });
+  if (silent){ cameraMove++; setCameraOffset(0, 0); }
+  else camTo(v, ms);
 }
 function resize(){
-  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-  if (VIEWS[S.camView]){ const v = viewOf(S.camView); camera.position.copy(v.pos); camLook.copy(v.look); camera.lookAt(camLook); }
+  viewportWidth = canvas.clientWidth; viewportHeight = canvas.clientHeight;
+  renderer.setSize(viewportWidth, viewportHeight, false); camera.aspect = viewportWidth / viewportHeight;
+  const style = getComputedStyle(preview);
+  previewInset = parseFloat(style.width) + parseFloat(style.right) + 12;
+  const v = VIEWS[S.camView] ? viewOf(S.camView) : null;
+  setCameraOffset(v ? v.offsetX : cameraOffset.x, v ? v.offsetY : cameraOffset.y);
+  if (v){ camera.position.copy(v.pos); camLook.copy(v.look); camera.lookAt(camLook); }
 }
-addEventListener('resize', resize);
+new ResizeObserver(resize).observe(canvas);
 
 /* ═════════ 표시창·알림 ═════════ */
 function updateDisplay(){
@@ -1364,14 +1428,19 @@ function frame(now){
     tmpV.copy(S.prize.g.position).project(camera);
     tapEl.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px'; tapEl.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px';
   }
-  // 집게 아래 캡슐 미리보기
-  const pk = S.mode === 'play' ? findTarget(S.cx, S.cz) : null, peek = $('peek');
-  if (pk){
-    const k2 = key(pk.tid, pk.kind);
-    if (peek.dataset.k !== k2){ const t = byId[pk.tid]; peek.dataset.k = k2; $('peekImg').src = iconURL(pk.tid, pk.kind); $('peekTopic').textContent = t.topic; $('peekKind').textContent = KIND_NAME[pk.kind]; peek.classList.toggle('note', pk.kind === 2); }
-    tmpV.copy(pk.g.position); tmpV.y += R * 2.4; tmpV.project(camera);
-    peek.style.left = ((tmpV.x + 1) / 2 * innerWidth) + 'px'; peek.style.top = ((1 - tmpV.y) / 2 * innerHeight) + 'px'; peek.hidden = false;
-  } else if (!peek.hidden){ peek.hidden = true; peek.dataset.k = ''; }
+  // 집게 아래에 있는 캡슐을 오른쪽에 미리 표시
+  const target = S.mode === 'play' ? findTarget(S.cx, S.cz) : null;
+  if (target){
+    const k = key(target.tid, target.kind);
+    if (preview.dataset.k !== k){
+      preview.dataset.k = k;
+      previewImage.src = iconURL(target.tid, target.kind, true);
+      previewKind.textContent = KIND_NAME[target.kind];
+      preview.classList.toggle('is-note', target.kind === 2);
+    }
+  }
+  const hidden = !target;
+  if (preview.hidden !== hidden) preview.hidden = hidden;
   // 모터 소리
   if (SND.motor) setMotor((S.mode === 'play' && (dx || dz)) || S.motorOn ? 1 : 0, S.motorOn ? 0.8 : 1);
   if (S.camView === 'attract'){
